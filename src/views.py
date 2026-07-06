@@ -13,7 +13,7 @@ from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 import numpy as np
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -677,7 +677,7 @@ class GPXView(QMainWindow):
         
         def seconds_to_timestamp(s):
             try:
-                return (_start_time + datetime.timedelta(seconds=self.viewmodel.profile.time[i])).strftime(r'%d.%m.%Y %H:%M')
+                return (_start_time + timedelta(seconds=self.viewmodel.profile.time[i])).strftime(r'%d.%m.%Y %H:%M')
             except Exception:
                 return 'nan'
         

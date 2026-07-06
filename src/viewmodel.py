@@ -10,7 +10,7 @@ import copy
 
 import json
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -278,7 +278,7 @@ class ViewModel(QObject):
                     track_segment.points[i] = GPXTrackPoint(track_segment.points[i])
                     
                     track_segment.points[i].elevation = _profile.elevation[i]
-                    track_segment.points[i].time = _start_time + datetime.timedelta(seconds=_profile.time[i])
+                    track_segment.points[i].time = _start_time + timedelta(seconds=_profile.time[i])
                     track_segment.points[i].distance_from_start = _profile.distance[i]
                 
                 _start_time = track_segment.points[-1].time
