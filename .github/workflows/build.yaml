@@ -1,0 +1,45 @@
+name: Build applications
+
+on:
+  workflow_dispatch:
+ 
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: macos-arm64
+          - os: windows-latest
+            artifact: windows-x64
+ 
+    runs-on: ${{ matrix.os }}
+ 
+    steps:
+      - uses: actions/checkout@v7
+ 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+ 
+      - name: Prepare Python environment
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+ 
+      - name: Build with PyInstaller
+        run: pyinstaller application.spec
+ 
+      - name: Package macOS build
+        if: matrix.os == 'macos-latest'
+        run: ditto -c -k --keepParent --sequesterRsrc --zlibCompressionLevel 9 "dist/GPX Track Planner.app" "dist/GPX-Track-Planner.${{ matrix.artifact }}.zip"
+ 
+      - name: Package Windows build
+        if: matrix.os == 'windows-latest'
+        run: Compress-Archive -CompressionLevel Optimal -Path "dist/GPX Track Planner" -DestinationPath "dist/GPX-Track-Planner.${{ matrix.artifact }}.zip"
+ 
+      - uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: dist/GPX-Track-Planner.*.zip
