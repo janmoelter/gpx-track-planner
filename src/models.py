@@ -2,8 +2,9 @@
 import abc
 
 import numpy as np
+import scipy.ndimage
 
-from geopy import distance as geodesic
+from geodesic import GeodesicDistance
 
 import gpxpy
 
@@ -11,13 +12,37 @@ class GPXTrackPoint(gpxpy.gpx.GPXTrackPoint):
     
     __slots__ = ['distance_from_start']
     
-    def __init__(self, point: gpxpy.gpx.GPXTrackPoint, distance_from_start: float | None = None):
+    def __init__(self, point: gpxpy.gpx.GPXTrackPoint):
         for cls in type(point).__mro__:
             for slot in getattr(cls, '__slots__', []):
                 if hasattr(point, slot):
                     setattr(self, slot, getattr(point, slot))
         
-        self.distance_from_start = distance_from_start
+        self.distance_from_start: float | None = None
+
+class GPXWaypoint(gpxpy.gpx.GPXWaypoint):
+    
+    __slots__ = ['distance_from_start']
+    
+    def __init__(self, point: gpxpy.gpx.GPXWaypoint):
+        for cls in type(point).__mro__:
+            for slot in getattr(cls, '__slots__', []):
+                if hasattr(point, slot):
+                    setattr(self, slot, getattr(point, slot))
+        
+        self.distance_from_start: float | None = None
+
+class GPXTrackSegment(gpxpy.gpx.GPXTrackSegment):
+    
+    __slots__ = ['waypoints']
+    
+    def __init__(self, tracksegment: gpxpy.gpx.GPXTrackSegment):
+        for cls in type(tracksegment).__mro__:
+            for slot in getattr(cls, '__slots__', []):
+                if hasattr(tracksegment, slot):
+                    setattr(self, slot, getattr(tracksegment, slot))
+        
+        self.waypoints: list[gpxpy.gpx.GPXWaypoint] = []
 
 
 class ElevationFilter(abc.ABC):
@@ -83,7 +108,7 @@ class Exporter(abc.ABC):
 
 class TrackSegmentProfile:
     
-    def __init__(self, track_segment_points: list[GPXTrackPoint]):
+    def __init__(self, track_segment_points: list[gpxpy.gpx.GPXTrackPoint], way_points: list[gpxpy.gpx.GPXWaypoint] = []):
         
         self._coordinates = []
         self._distance = []
@@ -94,7 +119,7 @@ class TrackSegmentProfile:
             self._coordinates += [(point.latitude, point.longitude)]
             
             if len(self._coordinates) > 1:
-                self._distance += [self._distance[-1] + geodesic.distance(self.coordinates[-2], self.coordinates[-1]).meters]
+                self._distance += [self._distance[-1] + GeodesicDistance.point_to_point(self.coordinates[-2], self.coordinates[-1])]
             else:
                 self._distance += [0]
             
@@ -104,11 +129,47 @@ class TrackSegmentProfile:
         self._distance = np.array(self._distance)
         self._raw_elevation = np.array(self._raw_elevation)
         
-        self._elevation = None
-        self._slope = None
-        self._ascent, self._descent = None, None
         
-        self._time = None
+        self._elevation = np.full_like(self._distance, np.nan)
+        self._slope = np.full_like(self._distance, np.nan)
+        self._ascent, self._descent = np.full_like(self._distance, np.nan), np.full_like(self._distance, np.nan)
+        
+        self._time = np.full_like(self._distance, np.nan)
+        
+        
+        
+        WAYPOINT_RADIUS = 100
+        self._waypoints = []
+        
+        def find_peaks(x, region_threshold=0):
+            
+            x_k, K = scipy.ndimage.label(x > region_threshold)
+            idx = [int(scipy.ndimage.maximum_position(x, x_k, k)[0]) for k in range(1,K+1)]
+            
+            return idx, x[idx]
+        
+        for n, point in enumerate(way_points):
+            
+            _way_point_track_point_distance = np.array([GeodesicDistance.point_to_point(p, (point.latitude, point.longitude)) for p in self._coordinates])
+            
+            _way_point_track_segment_findex = np.nan * np.ones(len(self._coordinates)-1)
+            _way_point_track_segment_coordinates = [None] * (len(self._coordinates)-1)
+            _way_point_track_segment_distance = np.nan * np.ones(len(self._coordinates)-1)
+            
+            for i in range(len(self._coordinates)-1):
+                S = self._distance[i+1] - self._distance[i]
+                dL = _way_point_track_point_distance[i]
+                dR = _way_point_track_point_distance[i+1]
+                
+                if (dL + dR - S) / 2 < WAYPOINT_RADIUS:
+                    _way_point_track_segment_distance[i], _way_point_track_segment_findex[i], _way_point_track_segment_coordinates[i] = GeodesicDistance.point_to_line((self._coordinates[i], self._coordinates[i+1]), (point.latitude, point.longitude), return_line_position=True)
+                else:
+                    continue
+            
+            _way_point_track_segment_findex += np.arange(len(self._coordinates)-1)
+            
+            self._waypoints += [list(map(float, list(_way_point_track_segment_findex[find_peaks(-_way_point_track_segment_distance, region_threshold=-WAYPOINT_RADIUS)[0]])))]
+
     
     @property
     def coordinates(self) -> list[tuple[float, float]]:
@@ -137,6 +198,22 @@ class TrackSegmentProfile:
     @property
     def time(self) -> np.ndarray:
         return self._time
+    
+    @property
+    def waypoints_findex(self):
+        return self._waypoints
+    
+    @property
+    def waypoints_distance(self):
+        return [np.interp(I, np.arange(len(self._distance)), self._distance) for I in self._waypoints]
+    
+    @property
+    def waypoints_elevation(self):
+        return [np.interp(I, np.arange(len(self._elevation)), self._elevation) for I in self._waypoints]
+    
+    @property
+    def waypoints_time(self):
+        return [np.interp(I, np.arange(len(self._time)), self._time) for I in self._waypoints]
     
     def apply_elevation_filter(self, filter: ElevationFilter):
         

@@ -26,7 +26,7 @@ import seaborn as sns
 @dataclass
 class GPXElements:
     track_segment_tree: QTreeWidget
-    waypoint_list: Any
+    waypoint_list: QListWidget
 
 @dataclass
 class ElevationCanvas:
@@ -90,7 +90,7 @@ class GPXView(QMainWindow):
         
         
         
-        self.viewmodel.track_loaded.connect(self._on_track_loaded)
+        self.viewmodel.gpx_file_loaded.connect(self._on_gpx_file_loaded)
         self.viewmodel.profile_changed.connect(self._on_profile_changed)
         self.viewmodel.point_selected.connect(self._on_point_selected)
     
@@ -107,6 +107,7 @@ class GPXView(QMainWindow):
         track_segment_tree.itemSelectionChanged.connect(self._on_track_segment_selection_changed)
         
         waypoint_list = QListWidget()
+        waypoint_list.itemClicked.connect(self._on_waypoint_clicked)
         
         return GPXElements(track_segment_tree=track_segment_tree, waypoint_list=waypoint_list)
     
@@ -522,44 +523,51 @@ class GPXView(QMainWindow):
             self.map_window.activateWindow()
 
 
-    def _on_track_loaded(self):
+    def _on_gpx_file_loaded(self):
+        
+        self.gpx_elements.track_segment_tree.blockSignals(True)
+        self.gpx_elements.waypoint_list.blockSignals(True)
         
         self.gpx_elements.track_segment_tree.clear()
         self.gpx_elements.waypoint_list.clear()
         
+        
         for i, track in enumerate(self.viewmodel.gpx.tracks):
-            track_item = QTreeWidgetItem(self.gpx_elements.track_segment_tree, [f'Track: {track.name}'])
+            track_item = QTreeWidgetItem(self.gpx_elements.track_segment_tree, [f'{i+1}: {track.name}'])
             for j, segment in enumerate(track.segments):
                 segment_item = QTreeWidgetItem(track_item, [f'Segment {j+1}'])
                 segment_item.setData(0, Qt.ItemDataRole.UserRole, (i,j))
 
         self.gpx_elements.track_segment_tree.expandAll()
         
-
-        try:
-            self.gpx_elements.track_segment_tree.setCurrentItem(self.gpx_elements.track_segment_tree.topLevelItem(0).child(0))
-        except Exception:
-            pass
-        
         
         for i, waypoint in enumerate(self.viewmodel.gpx.waypoints):
-            item = QListWidgetItem(f'{waypoint.name}')
+            item = QListWidgetItem(f'{i+1}: {waypoint.name}')
             item.setData(Qt.ItemDataRole.UserRole, i)
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
             item.setToolTip(f'{waypoint.latitude:.6f}, {waypoint.longitude:.6f}')
             self.gpx_elements.waypoint_list.addItem(item)
         
+        self.gpx_elements.waypoint_list.blockSignals(False)
+        self.gpx_elements.track_segment_tree.blockSignals(False)
+        
+        try:
+            self.gpx_elements.track_segment_tree.setCurrentItem(self.gpx_elements.track_segment_tree.topLevelItem(0).child(0))
+        except Exception:
+            pass
         
         if len(self.viewmodel.plugins.exporters) > 0:
             self.menu_actions.export_file.setEnabled(True)
         self.menu_actions.show_map.setEnabled(True) 
-
+    
     def _on_profile_changed(self):
         
         self._draw_elevation_profile()
         self._fill_data_table()
         self._get_control_values()
-
+        
+        self._enable_waypoints()
+    
     def _on_point_selected(self):
         
         idx = self.viewmodel.selected_point
@@ -582,6 +590,18 @@ class GPXView(QMainWindow):
             if data_keys is not None:
                 track_idx, segment_idx = data_keys
                 self.viewmodel.select_track_segment(track_idx, segment_idx)
+    
+    def _on_waypoint_clicked(self, item):
+        
+        n = item.data(Qt.ItemDataRole.UserRole)
+        I = self.viewmodel.profile.waypoints_findex[n]
+        
+        if self.viewmodel.selected_point < max(I):
+            idx = round(min([i for i in I if self.viewmodel.selected_point < i]))
+        else:
+            idx = round(I[0])
+        
+        self.viewmodel.set_selected_point(idx)
     
     def _on_filter_slider_changed(self):
         self.controls.filter_width_label.setText(str(self.controls.filter_width_slider.value()))
@@ -625,6 +645,17 @@ class GPXView(QMainWindow):
         self.controls.start_time_selector.setDateTime(QDateTime(self.viewmodel.track_segment_start_time or datetime.now().replace(second=0, microsecond=0)))
         self.controls.start_time_selector.blockSignals(False)
     
+    def _enable_waypoints(self):
+        
+        _waypoints_distance = self.viewmodel.profile.waypoints_distance
+        for n in range(len(_waypoints_distance)):
+            item = self.gpx_elements.waypoint_list.item(n)
+            
+            if len(_waypoints_distance[n]) > 0:
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEnabled)
+            else:
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
+    
     def _draw_elevation_profile(self):
         
         ax = self.elevation_canvas.axis
@@ -647,6 +678,18 @@ class GPXView(QMainWindow):
             ax.fill_between(self.viewmodel.profile.distance / 1000, np.where(I, self.viewmodel.profile.elevation, np.nan), 0, edgecolor=None, facecolor=self.elevation_canvas.colormap.to_rgba(sum(slope_bin)/2), zorder=0)
         
         ax.plot(self.viewmodel.profile.distance / 1000, self.viewmodel.profile.elevation, linewidth=1, zorder=2, label=f'{self.viewmodel.profile.ascent[-1]:.1f}m / {self.viewmodel.profile.descent[-1]:.1f}m')
+        
+        
+        _waypoints_distance = self.viewmodel.profile.waypoints_distance
+        _waypoints_elevation = self.viewmodel.profile.waypoints_elevation
+        
+        H = _elevation_range[1] + 0.01 * (_elevation_range[1] - _elevation_range[0])
+        
+        for n in range(len(_waypoints_distance)):
+            for r in range(len(_waypoints_distance[n])):
+                ax.plot([_waypoints_distance[n][r] / 1000] * 2, [_waypoints_elevation[n][r], H], linewidth=0.5, zorder=1, clip_on=False)
+                ax.text(_waypoints_distance[n][r] / 1000, H, f'{n+1}', horizontalalignment='center', verticalalignment='bottom', zorder=1, clip_on=False)
+        
         
         ax.grid(True, axis='y', which='major', linestyle='--', linewidth=0.5, zorder=-1)
 

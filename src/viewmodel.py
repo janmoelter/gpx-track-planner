@@ -122,7 +122,7 @@ class Plugins:
 
 class ViewModel(QObject):
     
-    track_loaded = pyqtSignal()
+    gpx_file_loaded = pyqtSignal()
     
     track_segment_selected = pyqtSignal()
     point_selected = pyqtSignal()
@@ -200,7 +200,7 @@ class ViewModel(QObject):
         self._smoothed = None
         self._profile = None
         
-        self.track_loaded.emit()
+        self.gpx_file_loaded.emit()
         
         if self.gpx.tracks and self.gpx.tracks[0].segments:
             self.select_track_segment(0,0)
@@ -212,7 +212,7 @@ class ViewModel(QObject):
             self._selected_track_segment = (track_idx, segment_idx)
             self._selected_point = 0
             
-            self._profile = TrackSegmentProfile(self.gpx.tracks[track_idx].segments[segment_idx].points)
+            self._profile = TrackSegmentProfile(self.gpx.tracks[track_idx].segments[segment_idx].points, self.gpx.waypoints)
             
             self._profile.apply_elevation_filter(self._filter)
             self._profile.apply_speed_model(self._speed_model)
@@ -263,23 +263,48 @@ class ViewModel(QObject):
         
         for track_idx, track in enumerate(gpx.tracks):
             
-            for segment_idx, track_segment in enumerate(track.segments):
-                if segment_idx == 0:
-                    _start_time = self._track_segment_start_times.get((track_idx,segment_idx), _now).astimezone()
-                else:
-                    _start_time = self._track_segment_start_times.get((track_idx,segment_idx), _start_time).astimezone()
+            for track_segment_idx in range(len(track.segments)):
+                track_segment = GPXTrackSegment(track.segments[track_segment_idx])
                 
-                _profile = TrackSegmentProfile(track_segment_points=track_segment.points)
+                if track_segment_idx == 0:
+                    _start_time = self._track_segment_start_times.get((track_idx,track_segment_idx), _now).astimezone()
+                else:
+                    _start_time = self._track_segment_start_times.get((track_idx,track_segment_idx), _start_time).astimezone()
+                
+                _profile = TrackSegmentProfile(track_segment_points=track_segment.points, way_points=gpx.waypoints)
                 _profile.apply_elevation_filter(self._filter)
                 _profile.apply_speed_model(self._speed_model)
                 
                 
                 for i in range(len(track_segment.points)):
-                    track_segment.points[i] = GPXTrackPoint(track_segment.points[i])
+                    track_segment_point = GPXTrackPoint(track_segment.points[i])
                     
-                    track_segment.points[i].elevation = _profile.elevation[i]
-                    track_segment.points[i].time = _start_time + timedelta(seconds=_profile.time[i])
-                    track_segment.points[i].distance_from_start = _profile.distance[i]
+                    track_segment_point.elevation = _profile.elevation[i]
+                    track_segment_point.time = _start_time + timedelta(seconds=_profile.time[i])
+                    track_segment_point.distance_from_start = _profile.distance[i]
+                    
+                    track_segment.points[i] = track_segment_point
+                
+                
+                
+                _waypoints_findex = _profile.waypoints_findex
+                _waypoints_distance = _profile.waypoints_distance
+                _waypoints_elevation = _profile.waypoints_elevation
+                _waypoints_time = _profile.waypoints_time
+                
+                for n in range(len(self.gpx.waypoints)):
+                    for r in range(len(_waypoints_findex[n])):
+                        waypoint = GPXWaypoint(self.gpx.waypoints[n])
+                        
+                        waypoint.time = _start_time + timedelta(seconds=_waypoints_time[n][r])
+                        waypoint.distance_from_start = _waypoints_distance[n][r]
+                        
+                        track_segment.waypoints += [waypoint]
+                        
+                track_segment.waypoints = sorted(track_segment.waypoints, key=lambda _: _.distance_from_start)
+                
+                
+                track.segments[track_segment_idx] = track_segment
                 
                 _start_time = track_segment.points[-1].time
         
