@@ -39,7 +39,11 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: Compress-Archive -CompressionLevel Optimal -Path "dist/GPX Track Planner" -DestinationPath "dist/GPX-Track-Planner.${{ matrix.artifact }}.zip"
  
-      - uses: actions/upload-artifact@v7
+      - name: Upload to GitHub releases
+        uses: softprops/action-gh-release@v3
         with:
-          archive: false
-          path: dist/GPX-Track-Planner.*.zip
+          tag_name: latest
+          name: Continuous release
+          make_latest: true
+          prerelease: false
+          files: dist/GPX-Track-Planner.*.zip
