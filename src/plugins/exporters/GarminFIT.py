@@ -313,22 +313,23 @@ class GarminFIT(Exporter):
                 
                 encoder.write_mesg({
                     'mesg_num': Profile['mesg_num']['COURSE'],
+                    'sport': 'generic',
                     'name': track_segment_name,
-                    'sport': 'generic'
                 })
                 
                 # Lap [1...n]
                 
                 encoder.write_mesg({
                     'mesg_num': Profile['mesg_num']['LAP'],
-                    'start_time': as_FITepoch_timestamp(start_point.time),
                     'timestamp': as_FITepoch_timestamp(end_point.time),
-                    'total_elapsed_time': as_FITepoch_timestamp(end_point.time) - as_FITepoch_timestamp(start_point.time),
-                    'total_timer_time': as_FITepoch_timestamp(end_point.time) - as_FITepoch_timestamp(start_point.time),
+                    'start_time': as_FITepoch_timestamp(start_point.time),
                     'start_position_lat': as_semicircles_angle(start_point.latitude),
                     'start_position_long': as_semicircles_angle(start_point.longitude),
                     'end_position_lat': as_semicircles_angle(end_point.latitude),
                     'end_position_long': as_semicircles_angle(end_point.longitude),
+                    'total_elapsed_time': as_FITepoch_timestamp(end_point.time) - as_FITepoch_timestamp(start_point.time),
+                    'total_timer_time': as_FITepoch_timestamp(end_point.time) - as_FITepoch_timestamp(start_point.time),
+                    'total_distance': end_point.distance_from_start,
                 })
                 
                 # Event Timer Start
@@ -346,10 +347,10 @@ class GarminFIT(Exporter):
                     encoder.write_mesg({
                         'mesg_num': Profile['mesg_num']['RECORD'],
                         'timestamp': as_FITepoch_timestamp(point.time),
-                        'distance': point.distance_from_start,
-                        'altitude': point.elevation,
                         'position_lat': as_semicircles_angle(point.latitude),
                         'position_long': as_semicircles_angle(point.longitude),
+                        'altitude': point.elevation,
+                        'distance': point.distance_from_start,
                     })
                 
                 # Course Point [0...n]
@@ -358,11 +359,11 @@ class GarminFIT(Exporter):
                     encoder.write_mesg({
                         'mesg_num': Profile['mesg_num']['COURSE_POINT'],
                         'timestamp': as_FITepoch_timestamp(waypoint.time),
-                        'name': waypoint.name or '',
-                        'type': SYM_TO_FIT_COURSE_POINT.get(waypoint.symbol, 'generic'),
                         'position_lat': as_semicircles_angle(waypoint.latitude),
                         'position_long': as_semicircles_angle(waypoint.longitude),
                         'distance': waypoint.distance_from_start,
+                        'type': SYM_TO_FIT_COURSE_POINT.get(waypoint.symbol, 'generic'),
+                        'name': waypoint.name or '',
                     })
                 
                 # Event Timer Stop
