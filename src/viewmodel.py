@@ -59,14 +59,22 @@ class Settings:
             except Exception:
                 logger.warning(f'Failed to load settings from {self._config_file}', exc_info=True)
     
-    def as_dict(self):
-        return {
-            'last_os_path': str(self.last_os_path),
-            'filter': self.filter,
-            'filter_width': self.filter_width,
-            'speed_model': self.speed_model,
-            'speed_model_parameters': self.speed_model_parameters,
-        }
+    def as_dict(self, processing=False):
+        if not processing:
+            return {
+                'last_os_path': str(self.last_os_path),
+                'filter': self.filter,
+                'filter_width': self.filter_width,
+                'speed_model': self.speed_model,
+                'speed_model_parameters': self.speed_model_parameters,
+            }
+        else:
+            return {
+                'filter': self.filter,
+                'filter_width': self.filter_width,
+                'speed_model': self.speed_model,
+                'speed_model_parameters': self.speed_model_parameters,
+            }
     
     def save(self):
         
@@ -336,7 +344,7 @@ class ViewModel(QObject):
                 _start_time = track_segment.points[-1].time
         
         try:
-            self.plugins.exporters[exporter_name].export(file_path, gpx, track_segment_index=self._selected_track_segment)
+            self.plugins.exporters[exporter_name].export(file_path, gpx, processing_settings=self.settings.as_dict(processing=True), track_segment_index=self._selected_track_segment)
             
             logger.info(f'Exported data to {file_path} using {self.plugins.exporters[exporter_name].__name__}')
         except Exception:
