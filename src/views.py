@@ -11,6 +11,8 @@ from PyQt6.QtWidgets import QAbstractItemView, QApplication, QComboBox, QDateTim
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 
+from contextlib import contextmanager
+
 import numpy as np
 
 from datetime import datetime, timedelta
@@ -93,6 +95,18 @@ class GPXView(QMainWindow):
         self.viewmodel.gpx_file_loaded.connect(self._on_gpx_file_loaded)
         self.viewmodel.profile_changed.connect(self._on_profile_changed)
         self.viewmodel.point_selected.connect(self._on_point_selected)
+    
+    
+    @contextmanager
+    def _busy(self):
+        self.setEnabled(False)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        QApplication.processEvents()
+        try:
+            yield
+        finally:
+            QApplication.restoreOverrideCursor()
+            self.setEnabled(True)
     
     def closeEvent(self, event):
         self.viewmodel.settings.save()
@@ -486,28 +500,29 @@ class GPXView(QMainWindow):
 
 
     def _open_file_dialog(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, f'{self.viewmodel.localization['menu_file_open']}:', str(self.viewmodel.settings.last_os_path), f'{self.viewmodel.localization['menu_file_open_filter']}')
+        with self._busy():
+            file_path, _ = QFileDialog.getOpenFileName(self, f'{self.viewmodel.localization['menu_file_open']}:', str(self.viewmodel.settings.last_os_path), f'{self.viewmodel.localization['menu_file_open_filter']}')
 
-        if file_path:
-            self.viewmodel.settings.last_os_path = pathlib.Path(file_path).parent
-            
-            try:
-                self.viewmodel.load_gpx_file(file_path)
-            except Exception:
-                QMessageBox.critical(self, '', f'{self.viewmodel.localization['message_error_load_gpx'].format(file_path=file_path)}')
+            if file_path:
+                self.viewmodel.settings.last_os_path = pathlib.Path(file_path).parent
+                
+                try:
+                    self.viewmodel.load_gpx_file(file_path)
+                except Exception:
+                    QMessageBox.critical(self, '', f'{self.viewmodel.localization['message_error_load_gpx'].format(file_path=file_path)}')
                 
     def _export_file_dialog(self):
-        
-        _exporter_collection = {exporter.file_filter: name for name, exporter in self.viewmodel.plugins.exporters.items()}
-        
-        file_path, file_filter = QFileDialog.getSaveFileName(self, f'{self.viewmodel.localization['menu_file_export']}:', str(self.viewmodel.settings.last_os_path), ';;'.join(_exporter_collection.keys()))
-        
-        
-        if file_path:
-            try:
-                self.viewmodel.export_file(file_path, _exporter_collection[file_filter])
-            except Exception:
-                QMessageBox.critical(self, '', f'{self.viewmodel.localization['message_error_export_file'].format(file_path=file_path)}')
+        with self._busy():
+            _exporter_collection = {exporter.file_filter: name for name, exporter in self.viewmodel.plugins.exporters.items()}
+            
+            file_path, file_filter = QFileDialog.getSaveFileName(self, f'{self.viewmodel.localization['menu_file_export']}:', str(self.viewmodel.settings.last_os_path), ';;'.join(_exporter_collection.keys()))
+            
+            
+            if file_path:
+                try:
+                    self.viewmodel.export_file(file_path, _exporter_collection[file_filter])
+                except Exception:
+                    QMessageBox.critical(self, '', f'{self.viewmodel.localization['message_error_export_file'].format(file_path=file_path)}')
 
     def _open_settings_directory(self):
         
@@ -530,44 +545,43 @@ class GPXView(QMainWindow):
 
 
     def _on_gpx_file_loaded(self):
-        
-        self.gpx_elements.track_segment_tree.blockSignals(True)
-        self.gpx_elements.waypoint_list.blockSignals(True)
-        
-        self.gpx_elements.track_segment_tree.clear()
-        self.gpx_elements.waypoint_list.clear()
-        
-        
-        for i, track in enumerate(self.viewmodel.gpx.tracks):
-            track_item = QTreeWidgetItem(self.gpx_elements.track_segment_tree, [f'{i+1}: {track.name}'])
-            for j, segment in enumerate(track.segments):
-                segment_item = QTreeWidgetItem(track_item, [f'Segment {j+1}'])
-                segment_item.setData(0, Qt.ItemDataRole.UserRole, (i,j))
+        with self._busy():
+            self.gpx_elements.track_segment_tree.blockSignals(True)
+            self.gpx_elements.waypoint_list.blockSignals(True)
+            
+            self.gpx_elements.track_segment_tree.clear()
+            self.gpx_elements.waypoint_list.clear()
+            
+            
+            for i, track in enumerate(self.viewmodel.gpx.tracks):
+                track_item = QTreeWidgetItem(self.gpx_elements.track_segment_tree, [f'{i+1}: {track.name}'])
+                for j, segment in enumerate(track.segments):
+                    segment_item = QTreeWidgetItem(track_item, [f'Segment {j+1}'])
+                    segment_item.setData(0, Qt.ItemDataRole.UserRole, (i,j))
 
-        self.gpx_elements.track_segment_tree.expandAll()
-        
-        
-        for i, waypoint in enumerate(self.viewmodel.gpx.waypoints):
-            item = QListWidgetItem(f'{i+1}: {waypoint.name}')
-            item.setData(Qt.ItemDataRole.UserRole, i)
-            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
-            item.setToolTip(f'{waypoint.latitude:.6f}, {waypoint.longitude:.6f}')
-            self.gpx_elements.waypoint_list.addItem(item)
-        
-        self.gpx_elements.waypoint_list.blockSignals(False)
-        self.gpx_elements.track_segment_tree.blockSignals(False)
-        
-        try:
-            self.gpx_elements.track_segment_tree.setCurrentItem(self.gpx_elements.track_segment_tree.topLevelItem(0).child(0))
-        except Exception:
-            pass
-        
-        if len(self.viewmodel.plugins.exporters) > 0:
-            self.menu_actions.export_file.setEnabled(True)
-        self.menu_actions.show_map.setEnabled(True) 
+            self.gpx_elements.track_segment_tree.expandAll()
+            
+            
+            for i, waypoint in enumerate(self.viewmodel.gpx.waypoints):
+                item = QListWidgetItem(f'{i+1}: {waypoint.name}')
+                item.setData(Qt.ItemDataRole.UserRole, i)
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEnabled)
+                item.setToolTip(f'{waypoint.latitude:.6f}, {waypoint.longitude:.6f}')
+                self.gpx_elements.waypoint_list.addItem(item)
+            
+            self.gpx_elements.waypoint_list.blockSignals(False)
+            self.gpx_elements.track_segment_tree.blockSignals(False)
+            
+            try:
+                self.gpx_elements.track_segment_tree.setCurrentItem(self.gpx_elements.track_segment_tree.topLevelItem(0).child(0))
+            except Exception:
+                pass
+            
+            if len(self.viewmodel.plugins.exporters) > 0:
+                self.menu_actions.export_file.setEnabled(True)
+            self.menu_actions.show_map.setEnabled(True) 
     
     def _on_profile_changed(self):
-        
         self._draw_elevation_profile()
         self._fill_data_table()
         self._get_control_values()
@@ -587,15 +601,15 @@ class GPXView(QMainWindow):
         self.data_table.blockSignals(False)
         
     def _on_track_segment_selection_changed(self):
-        
-        selected_items = self.gpx_elements.track_segment_tree.selectedItems()
-        
-        if selected_items:
-            data_keys = selected_items[0].data(0, Qt.ItemDataRole.UserRole)
+        with self._busy():
+            selected_items = self.gpx_elements.track_segment_tree.selectedItems()
             
-            if data_keys is not None:
-                track_idx, segment_idx = data_keys
-                self.viewmodel.select_track_segment(track_idx, segment_idx)
+            if selected_items:
+                data_keys = selected_items[0].data(0, Qt.ItemDataRole.UserRole)
+                
+                if data_keys is not None:
+                    track_idx, segment_idx = data_keys
+                    self.viewmodel.select_track_segment(track_idx, segment_idx)
     
     def _on_waypoint_clicked(self, item):
         
