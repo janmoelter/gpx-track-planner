@@ -56,8 +56,8 @@ class ElevationFilter(abc.ABC):
     name: str
     description: str
     
-    def __init__(self, width: float):
-        if width >= 0:
+    def __init__(self, width: float | None):
+        if width is None or width >= 0:
             self.width = width
         else:
             raise ValueError
@@ -235,7 +235,28 @@ class TrackSegmentProfile:
             self._slope = np.gradient(self._elevation, self._distance)
             
         self._ascent, self._descent = self._compute_ascent_descent(self.elevation)
-
+    
+    def infer_optimal_elevation_filter_width(self, filter: ElevationFilter):
+        
+        _elevation_filter = filter
+        
+        def filtered_observable(filter_width: float):
+            
+            _elevation_filter.width = filter_width
+            _elevation = _elevation_filter.compute_filtered_elevation(self._distance, self._raw_elevation)
+            _ascent, _ = self._compute_ascent_descent(_elevation)
+            
+            return _ascent[-1]
+        
+        
+        _filter_width_range = [0, 2000]
+        _filtered_observable = [filtered_observable(filter_width=w) for w in _filter_width_range]
+        
+        _minimize_scalar = scipy.optimize.minimize_scalar(lambda w: -(np.interp(w, _filter_width_range, _filtered_observable) - filtered_observable(filter_width=w)), bounds=_filter_width_range, method='Bounded', options={'maxiter': 100, 'disp': 0, 'xatol': 0.1})
+        
+        if _minimize_scalar.success:
+            return _minimize_scalar.x
+    
     def _compute_ascent_descent(self, elevation: np.ndarray):
         _elevation_difference = np.diff(elevation)
         

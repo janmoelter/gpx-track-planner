@@ -5,7 +5,7 @@ import pathlib
 from dataclasses import dataclass
 from typing import Any
 
-from PyQt6.QtCore import Qt, QDateTime, QLocale, QSize, QTimer, QUrl
+from PyQt6.QtCore import Qt, QDateTime, QEvent, QLocale, QSize, QTimer, QUrl
 from PyQt6.QtGui import QAction, QDesktopServices, QDoubleValidator, QPalette
 from PyQt6.QtWidgets import QAbstractItemView, QApplication, QComboBox, QDateTimeEdit, QFileDialog, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QSizePolicy, QSlider, QSplitter, QTableWidget, QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 from PyQt6.QtWebEngineWidgets import QWebEngineView
@@ -198,6 +198,7 @@ class GPXView(QMainWindow):
         
         filter_width_label = QLabel()
         filter_width_label.setFixedWidth(40)
+        filter_width_label.installEventFilter(self)
         
         start_time_selector = QDateTimeEdit()
         start_time_selector.setFixedWidth(200)
@@ -220,6 +221,13 @@ class GPXView(QMainWindow):
         
         
         return ControlsPanel(filter_selector=filter_selector, filter_selector_debounce_timer=filter_selector_debounce_timer, filter_width_slider=filter_width_slider, filter_width_label=filter_width_label, start_time_selector=start_time_selector, speed_model_selector=speed_model_selector, speed_model_parameters_panel=speed_model_parameters_panel, speed_model_parameter_inputs={}, fit_speed_model_button=fit_speed_model_button)
+
+    def eventFilter(self, obj, event):
+        if obj is self.controls.filter_width_label and event.type() == QEvent.Type.MouseButtonDblClick:
+            self._on_filter_width_label_double_clicked()
+            return True
+        
+        return super().eventFilter(obj, event)
 
     def _create_speed_model_parameter_panel(self):
         
@@ -632,6 +640,13 @@ class GPXView(QMainWindow):
     def _on_filter_changed(self):
         
         self.viewmodel.set_filter(name=self.controls.filter_selector.currentData(), width=self.controls.filter_width_slider.value())
+    
+    def _on_filter_width_label_double_clicked(self):
+        
+        self.viewmodel.set_filter(name=self.controls.filter_selector.currentData(), width=None)
+        
+        self.controls.filter_width_slider.setValue(self.viewmodel.filter.width)
+        self.controls.filter_width_label.setText(str(self.viewmodel.filter.width))
     
     def _on_start_time_changed(self):
         self.viewmodel.set_start_time(self.controls.start_time_selector.dateTime().toPyDateTime().replace(second=0, microsecond=0))

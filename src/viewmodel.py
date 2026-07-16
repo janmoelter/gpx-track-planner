@@ -243,18 +243,23 @@ class ViewModel(QObject):
             self.track_segment_selected.emit()
             self.profile_changed.emit()
         
-    def set_filter(self, name: str, width: float):
-        self._filter = self.plugins.filters[name](width=width)
-        
-        self.settings.filter = name
-        self.settings.filter_width = self._filter.width
-        
-        if self._profile is not None:
-            self._profile.apply_elevation_filter(self._filter)
-            self._profile.apply_speed_model(self._speed_model)
+    def set_filter(self, name: str, width: float | None):
+        if width is not None:
+            self._filter = self.plugins.filters[name](width=width)
             
-            self.profile_changed.emit()
+            self.settings.filter = name
+            self.settings.filter_width = self._filter.width
             
+            if self._profile is not None:
+                self._profile.apply_elevation_filter(self._filter)
+                self._profile.apply_speed_model(self._speed_model)
+                
+                self.profile_changed.emit()
+        else:
+            _filter = self.plugins.filters[name](width=None)
+            
+            self.set_filter(name=name, width=round(self._profile.infer_optimal_elevation_filter_width(_filter)))
+    
     def set_speed_model(self, name: str, parameters={}):
         self._speed_model = self.plugins.speed_models[name](**parameters)
         
