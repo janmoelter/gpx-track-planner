@@ -599,15 +599,17 @@ class GPXView(QMainWindow):
     
     def _on_waypoint_clicked(self, item):
         
-        n = item.data(Qt.ItemDataRole.UserRole)
-        I = self.viewmodel.profile.waypoints_findex[n]
-        
-        if self.viewmodel.selected_point < max(I):
-            idx = round(min([i for i in I if self.viewmodel.selected_point < i]))
-        else:
-            idx = round(I[0])
-        
-        self.viewmodel.set_selected_point(idx)
+        if item.flags() & Qt.ItemFlag.ItemIsEnabled:
+            
+            n = item.data(Qt.ItemDataRole.UserRole)
+            I = self.viewmodel.profile.waypoints_findex[n]
+            
+            if self.viewmodel.selected_point < max(I):
+                idx = round(min([i for i in I if self.viewmodel.selected_point < i]))
+            else:
+                idx = round(I[0])
+            
+            self.viewmodel.set_selected_point(idx)
     
     def _on_filter_slider_changed(self):
         self.controls.filter_width_label.setText(str(self.controls.filter_width_slider.value()))
