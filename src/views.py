@@ -7,7 +7,7 @@ from typing import Any
 
 from PyQt6.QtCore import Qt, QDateTime, QLocale, QSize, QTimer, QUrl
 from PyQt6.QtGui import QAction, QDesktopServices, QDoubleValidator, QPalette
-from PyQt6.QtWidgets import QAbstractItemView, QApplication, QComboBox, QDateTimeEdit, QFileDialog, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QPushButton, QSizePolicy, QSlider, QSplitter, QTableWidget, QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QAbstractItemView, QApplication, QComboBox, QDateTimeEdit, QFileDialog, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QSizePolicy, QSlider, QSplitter, QTableWidget, QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 
@@ -491,8 +491,11 @@ class GPXView(QMainWindow):
         if file_path:
             self.viewmodel.settings.last_os_path = pathlib.Path(file_path).parent
             
-            self.viewmodel.load_gpx_file(file_path)
-    
+            try:
+                self.viewmodel.load_gpx_file(file_path)
+            except Exception:
+                QMessageBox.critical(self, '', f'{self.viewmodel.localization['message_error_load_gpx'].format(file_path=file_path)}')
+                
     def _export_file_dialog(self):
         
         _exporter_collection = {exporter.file_filter: name for name, exporter in self.viewmodel.plugins.exporters.items()}
@@ -501,7 +504,10 @@ class GPXView(QMainWindow):
         
         
         if file_path:
-            self.viewmodel.export_file(file_path, _exporter_collection[file_filter])
+            try:
+                self.viewmodel.export_file(file_path, _exporter_collection[file_filter])
+            except Exception:
+                QMessageBox.critical(self, '', f'{self.viewmodel.localization['message_error_export_file'].format(file_path=file_path)}')
 
     def _open_settings_directory(self):
         

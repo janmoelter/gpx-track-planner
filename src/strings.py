@@ -30,6 +30,8 @@ localizations = {
         'label_descent': 'Descent',
         'label_time': 'Time',
         'label_absolute_slope': 'Abs. Slope',
+        'message_error_load_gpx': 'Opening the GPX file {file_path} failed',
+        'message_error_export_file': 'Exporting the data to {file_path} failed',
     },
     'de': {
         'menu_file': 'Datei',
@@ -59,5 +61,7 @@ localizations = {
         'label_time': 'Zeit',
         'label_absolute_slope': 'Abs. Steigung',
         'mapview_title': 'Karte',
+        'message_error_load_gpx': 'Öffnen der GPX-Datei {file_path} ist fehlgeschlagen',
+        'message_error_export_file': 'Exportieren der Daten nach {file_path} ist fehlgeschlagen',
     }
 }

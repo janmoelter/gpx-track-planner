@@ -1,5 +1,7 @@
 import sys
 
+import logging
+
 import pathlib
 import platformdirs
 
@@ -18,6 +20,9 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from models import *
 
 import strings
+
+
+logger = logging.getLogger(__name__)
 
 
 class Settings:
@@ -49,8 +54,10 @@ class Settings:
                 self.speed_model = data.get('speed_model', self.speed_model)
                 self.speed_model_parameters = data.get('speed_model_parameters', self.speed_model_parameters)
                 
+                logger.info(f'Loaded settings from {self._config_file}')
+                
             except Exception:
-                pass
+                logger.warning(f'Failed to load settings from {self._config_file}', exc_info=True)
     
     def as_dict(self):
         return {
@@ -63,8 +70,14 @@ class Settings:
     
     def save(self):
         
-        with open(self._config_file, 'w') as _:
-            json.dump(self.as_dict(), _, indent=2)
+        try:
+            with open(self._config_file, 'w') as _:
+                json.dump(self.as_dict(), _, indent=2)
+                
+            logger.info(f'Saved settings to {self._config_file}')
+            
+        except Exception:
+            logger.warning(f'Failed to save settings to {self._config_file}', exc_info=True)
 
 class Plugins:
     def __init__(self, base_path, language_code='en'):
@@ -108,10 +121,11 @@ class Plugins:
                                             obj.file_filter = obj.file_filter.get(self._language_code, obj.file_filter['en'])
                                     
                                     collection[name] = obj
-                                
-                                
-                        except Exception as e:
-                            print(f'Failed to load plugin {file}: {e}')
+                                    
+                                    logger.info(f'Loaded plugin {obj.__name__} ({file})')
+                            
+                        except Exception:
+                            logger.warning(f'Failed to load plugin {obj.__name__} ({file})', exc_info=True)
         
         
         self.filters = dict(sorted(self.filters.items(), key=lambda item: item[1].name))
@@ -167,6 +181,7 @@ class ViewModel(QObject):
         try:
             _apply_settings()
         except Exception:
+            logger.warning('Failed to apply settings, resetting to defaults', exc_info=True)
             self.settings = Settings(user_state_path)
             
             _apply_settings()
@@ -194,8 +209,15 @@ class ViewModel(QObject):
     
     def load_gpx_file(self, file_path: str):
         
-        with open(file_path, 'r', encoding='utf-8-sig') as _:
-            self.gpx = gpxpy.parse(_)
+        try:
+            with open(file_path, 'r', encoding='utf-8-sig') as _:
+                self.gpx = gpxpy.parse(_)
+            
+            logger.info(f'Loaded GPX file {file_path}')
+        except:
+            logger.error(f'Failed to load GPX file {file_path}', exc_info=True)
+            raise
+        
         
         self._smoothed = None
         self._profile = None
@@ -308,6 +330,10 @@ class ViewModel(QObject):
                 
                 _start_time = track_segment.points[-1].time
         
-        
-        self.plugins.exporters[exporter_name].export(file_path, gpx, track_segment_index=self._selected_track_segment)
+        try:
+            self.plugins.exporters[exporter_name].export(file_path, gpx, track_segment_index=self._selected_track_segment)
+            
+            logger.info(f'Exported data to {file_path} using {self.plugins.exporters[exporter_name].__name__}')
+        except Exception:
+            logger.error(f'Failed to export data using {self.plugins.exporters[exporter_name].__name__}', exc_info=True)
         

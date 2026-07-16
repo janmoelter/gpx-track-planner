@@ -1,6 +1,13 @@
+
+import logging
+
 import scipy.optimize
 
 from geographiclib.geodesic import Geodesic
+
+
+logger = logging.getLogger(__name__)
+
 
 class GeodesicDistance:
     
@@ -27,3 +34,6 @@ class GeodesicDistance:
                 return float(_minimize_scalar.fun), float(_minimize_scalar.x), (_Point['lat2'],_Point['lon2'])
             else:
                 return float(_minimize_scalar.fun)
+        
+        else:
+            logger.warning(f'point_to_line: minimize_scalar did not converge for line {line} and point {p}')

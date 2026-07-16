@@ -1,4 +1,6 @@
 
+import logging
+
 import abc
 
 import numpy as np
@@ -7,6 +9,10 @@ import scipy.ndimage
 from geodesic import GeodesicDistance
 
 import gpxpy
+
+
+logger = logging.getLogger(__name__)
+
 
 class GPXTrackPoint(gpxpy.gpx.GPXTrackPoint):
     
@@ -217,7 +223,13 @@ class TrackSegmentProfile:
     
     def apply_elevation_filter(self, filter: ElevationFilter):
         
-        self._elevation = filter.compute_filtered_elevation(self._distance, self._raw_elevation)
+        try:
+            self._elevation = filter.compute_filtered_elevation(self._distance, self._raw_elevation)
+            
+            logger.debug(f'Applied elevation filter {type(filter).__name__} (width={filter.width})')
+        except Exception:
+            logger.error(f'Failed to apply elevation filter {type(filter).__name__} (width={filter.width})', exc_info=True)
+            raise
         
         with np.errstate(divide='ignore', invalid='ignore'):
             self._slope = np.gradient(self._elevation, self._distance)
@@ -233,7 +245,13 @@ class TrackSegmentProfile:
         return _ascent, _descent
 
     def apply_speed_model(self, speed_model: SpeedModel):
-        self._time = speed_model.compute_elapsed_time(self._distance, self._elevation)
+        try:
+            self._time = speed_model.compute_elapsed_time(self._distance, self._elevation)
+            
+            logger.debug(f'Applied speed model {type(speed_model).__name__}')
+        except Exception:
+            logger.error(f'Failed to apply speed model {type(speed_model).__name__}', exc_info=True)
+            raise
 
     def where_slope(self, slope_bin: tuple[float, float]):
         
